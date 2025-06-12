@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ピックルボール作戦板 (Web版)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            overflow: hidden; /* スクロールバーが表示されないように */
+        }
+        #app-container {
+            display: flex;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background-color: white;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #canvas-container {
+            position: relative;
+            background-color: #5cb85c; /* ピックルボールコートの芝生の色 */
+            /* 幅と高さを調整 (横向きに) */
+            width: 1100px; /* 横長のコート表示に合わせる */
+            height: 500px;  /* コートの幅に合わせて調整 */
+            border-right: 1px solid #ddd;
+        }
+        canvas {
+            display: block;
+            background-color: transparent; /* 背景は親コンテナに任せる */
+        }
+        #sidebar {
+            width: 250px;
+            background-color: #e9ecef;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        h2 {
+            text-align: center;
+            color: #333;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .option-group {
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: white;
+            font-size: 0.9rem;
+        }
+        .option-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .color-palette {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+        .color-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .color-box.selected {
+            border-color: #007bff;
+        }
+        input[type="checkbox"] {
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="canvas-container">
+            <canvas id="pickleballCanvas"></canvas>
+        </div>
+        <div id="sidebar">
+            <h2>操作メニュー</h2>
+            <button id="addPlayerBtn">プレイヤー追加</button>
+            <div class="option-group">
+                <label>プレイヤーの色:</label>
+                <div class="color-palette" id="playerColorPalette">
+                    <div class="color-box selected" data-color="red" style="background-color: red;"></div>
+                    <div class="color-box" data-color="blue" style="background-color: blue;"></div>
+                    <div class="color-box" data-color="green" style="background-color: green;"></div>
+                    <div class="color-box" data-color="purple" style="background-color: purple;"></div>
+                </div>
+            </div>
+            <div class="option-group">
+                <label>
+                    <input type="checkbox" id="drawLineModeCheckbox">
+                    線を描画
+                </label>
+                <label>線の色:</label>
+                <div class="color-palette" id="lineColorPalette">
+                    <div class="color-box selected" data-color="blue" style="background-color: blue;"></div>
+                    <div class="color-box" data-color="black" style="background-color: black;"></div>
+                    <div class="color-box" data-color="orange" style="background-color: orange;"></div>
+                    <div class="color-box" data-color="green" style="background-color: green;"></div>
+                </div>
+            </div>
+            <button id="clearLinesBtn">線だけ消去</button>
+            <button id="clearAllBtn">全消去</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('pickleballCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // キャンバスの幅と高さを実際のコートの比率 (44:20) に合わせて調整
+        const canvasWidth = 1100; // 長さ44フィートに相当
+        const canvasHeight = 500;  // 幅20フィートに相当
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+
+        let players = [];
+        let lines = [];
+        let currentPlayer = null;
+        let drawLineMode = false;
+        let lineStart = null;
+        let currentDrawingLine = null;
+
+        let currentPlayerColor = 'red';
+        let currentLineColor = 'blue';
+
+        const playerRadius = 15;
+
+        // --- コートの描画 ---
+        function drawPickleballCourt() {
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight); // キャンバスをクリア
+
+            // コートの実際の寸法 (フィート)
+            const courtRealWidth = 20; // 左右方向 (このキャンバスでは高さに対応)
+            const courtRealLength = 44; // 上下方向 (このキャンバスでは幅に対応)
+            const kitchenRealLength = 7; // キッチンゾーンの長さ
+
+            // キャンバス内のコートの占有率
+            // 例えば、キャンバスの90%を使うなど
+            const courtScale = 0.9; 
+
+            const effectiveCourtWidth = canvasWidth * courtScale;
+            const effectiveCourtHeight = canvasHeight * courtScale;
+
+            // 実際の比率に合わせて、どちらの寸法を基準にするか決定
+            // コートの縦横比 (44/20 = 2.2)
+            const courtAspectRatio = courtRealLength / courtRealWidth;
+            const canvasAspectRatio = canvasWidth / canvasHeight;
+
+            let drawWidth, drawHeight;
+
+            if (canvasAspectRatio > courtAspectRatio) {
+                // キャンバスがコートより横長すぎる場合、高さを基準に幅を計算
+                drawHeight = effectiveCourtHeight;
+                drawWidth = drawHeight * courtAspectRatio;
+            } else {
+                // キャンバスがコートより縦長すぎるか、同等な場合、幅を基準に高さを計算
+                drawWidth = effectiveCourtWidth;
+                drawHeight = drawWidth / courtAspectRatio;
+            }
+
+            // コートの左上隅の座標を計算 (中央寄せ)
+            const courtLeft = (canvasWidth - drawWidth) / 2;
+            const courtTop = (canvasHeight - drawHeight) / 2;
+            const courtRight = courtLeft + drawWidth;
+            const courtBottom = courtTop + drawHeight;
+
+            // コート外枠
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(courtLeft, courtTop, drawWidth, drawHeight);
+
+            // ネット (中央) - 横向きなので縦の中央
+            const netX = courtLeft + drawWidth / 2;
+            ctx.beginPath();
+            ctx.moveTo(netX, courtTop);
+            ctx.lineTo(netX, courtBottom);
+            ctx.stroke();
+
+            // ノンボレーゾーン (キッチン) - ネットから7フィート
+            // キッチンの長さをキャンバスのピクセルに変換
+            const kitchenLengthPixels = (kitchenRealLength / courtRealLength) * drawWidth;
+            
+            const kitchenXLeft = netX - kitchenLengthPixels;
+            const kitchenXRight = netX + kitchenLengthPixels;
+
+            // 左のキッチン (ネットから左へ7フィート)
+            ctx.strokeRect(kitchenXLeft, courtTop, kitchenLengthPixels, drawHeight);
+            // 右のキッチン (ネットから右へ7フィート)
+            ctx.strokeRect(netX, courtTop, kitchenLengthPixels, drawHeight);
+
+            // センターライン (ベースラインからキッチンラインまで)
+            const center_y = courtTop + drawHeight / 2;
+            
+            // 左側のセンターライン
+            ctx.beginPath();
+            ctx.moveTo(courtLeft, center_y);
+            ctx.lineTo(kitchenXLeft, center_y);
+            ctx.stroke();
+
+            // 右側のセンターライン
+            ctx.beginPath();
+            ctx.moveTo(kitchenXRight, center_y);
+            ctx.lineTo(courtRight, center_y);
+            ctx.stroke();
+        }
+
+        // --- プレイヤーの描画 ---
+        function drawPlayer(player) {
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, playerRadius, 0, Math.PI * 2);
+            ctx.fillStyle = player.color;
+            ctx.fill();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = 'white';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(player.number, player.x, player.y);
+        }
+
+        // --- 全体の再描画 ---
+        function redrawAll() {
+            drawPickleballCourt();
+            lines.forEach(line => drawLine(line)); // 既存の線を描画
+            players.forEach(player => drawPlayer(player)); // 既存のプレイヤーを描画
+
+            // 描画中の仮の線があればそれも描画
+            if (currentDrawingLine) {
+                drawLine(currentDrawingLine);
+            }
+        }
+
+        // --- 線描画 ---
+        function drawLine(line) {
+            ctx.beginPath();
+            ctx.moveTo(line.startX, line.startY);
+            ctx.lineTo(line.endX, line.endY);
+            ctx.strokeStyle = line.color;
+            ctx.lineWidth = 3;
+            // 矢印の描画 (シンプルに)
+            const headlen = 10; // length of head in pixels
+            const angle = Math.atan2(line.endY - line.startY, line.endX - line.startX);
+            ctx.lineTo(line.endX - headlen * Math.cos(angle - Math.PI / 6), line.endY - headlen * Math.sin(angle - Math.PI / 6));
+            ctx.moveTo(line.endX, line.endY);
+            ctx.lineTo(line.endX - headlen * Math.cos(angle + Math.PI / 6), line.endY - headlen * Math.sin(angle + Math.PI / 6));
+            ctx.stroke();
+        }
+
+        // --- イベントハンドラ ---
+
+        // プレイヤー追加
+        document.getElementById('addPlayerBtn').addEventListener('click', () => {
+            const newPlayer = {
+                x: canvasWidth / 2 - 100, // 初期位置は中央より少し左
+                y: canvasHeight / 2,     // 中央
+                radius: playerRadius,
+                color: currentPlayerColor,
+                number: players.length + 1
+            };
+            players.push(newPlayer);
+            redrawAll();
+        });
+
+        // 線だけ消去
+        document.getElementById('clearLinesBtn').addEventListener('click', () => {
+            lines = []; // 線を格納する配列を空にする
+            redrawAll(); // 再描画
+        });
+
+        // 全消去
+        document.getElementById('clearAllBtn').addEventListener('click', () => {
+            players = [];
+            lines = [];
+            redrawAll();
+        });
+
+        // 線描画モード切り替え
+        document.getElementById('drawLineModeCheckbox').addEventListener('change', (event) => {
+            drawLineMode = event.target.checked;
+            if (!drawLineMode) { // 線描画モード解除時に描画中の線をクリア
+                currentDrawingLine = null;
+                lineStart = null;
+                redrawAll();
+            }
+        });
+
+        // プレイヤー色の選択
+        document.getElementById('playerColorPalette').addEventListener('click', (event) => {
+            const target = event.target;
+            if (target.classList.contains('color-box')) {
+                document.querySelector('#playerColorPalette .selected')?.classList.remove('selected');
+                target.classList.add('selected');
+                currentPlayerColor = target.dataset.color;
+            }
+        });
+
+        // 線の色の選択
+        document.getElementById('lineColorPalette').addEventListener('click', (event) => {
+            const target = event.target;
+            if (target.classList.contains('color-box')) {
+                document.querySelector('#lineColorPalette .selected')?.classList.remove('selected');
+                target.classList.add('selected');
+                currentLineColor = target.dataset.color;
+            }
+        });
+
+        // マウスダウンイベント (タッチイベントにもある程度対応)
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (drawLineMode) {
+                lineStart = { x: mouseX, y: mouseY };
+                currentDrawingLine = { startX: lineStart.x, startY: lineStart.y, endX: mouseX, endY: mouseY, color: currentLineColor };
+            } else {
+                for (let i = players.length - 1; i >= 0; i--) {
+                    const p = players[i];
+                    const dist = Math.sqrt(Math.pow(mouseX - p.x, 2) + Math.pow(mouseY - p.y, 2));
+                    if (dist < p.radius) {
+                        currentPlayer = p;
+                        break;
+                    }
+                }
+            }
+        });
+
+        // マウス移動イベント (タッチイベントにもある程度対応)
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            if (drawLineMode && lineStart) {
+                currentDrawingLine.endX = mouseX;
+                currentDrawingLine.endY = mouseY;
+                redrawAll();
+            } else if (currentPlayer) {
+                currentPlayer.x = mouseX;
+                currentPlayer.y = mouseY;
+                redrawAll();
+            }
+        });
+
+        // マウスアップイベント (タッチイベントにもある程度対応)
+        canvas.addEventListener('mouseup', () => {
+            if (drawLineMode && lineStart && currentDrawingLine) {
+                lines.push({ ...currentDrawingLine });
+                lineStart = null;
+                currentDrawingLine = null;
+            }
+            currentPlayer = null;
+            redrawAll();
+        });
+
+        // 初期描画
+        redrawAll();
+
+    </script>
+</body>
+</html>
