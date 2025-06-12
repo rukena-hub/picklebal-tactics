@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ピックルボール作戦板 (Web版)</title>
+    <title>ピックルボール作戦板 (Web版) - v2025.06.13-v3</title>
     <style>
         html, body {
             height: 100%;
@@ -153,6 +153,10 @@
     </div>
 
     <script>
+        // Version for debugging and tracking changes
+        const APP_VERSION = "2025.06.13-v3";
+        console.log(`Pickleball Tactics Board - Version: ${APP_VERSION}`);
+
         const canvas = document.getElementById('pickleballCanvas');
         const ctx = canvas.getContext('2d');
         
@@ -162,7 +166,7 @@
         const ORIGINAL_COURT_LENGTH_PX = 1100; // 横方向 (44フィートに相当)
         const ORIGINAL_COURT_WIDTH_PX = 500;    // 縦方向 (20フィートに相当)
 
-        const HIT_AREA_PADDING = 10; // プレイヤーやボールの反応範囲に加えるパディング (px)
+        const HIT_AREA_PADDING = 15; // プレイヤーやボールの反応範囲に加えるパディング (px) - 10から15に増加
         const ARROWHEAD_SIZE = 10; // 矢印のサイズ (px)
         const ARROWHEAD_ANGLE = Math.PI / 6; // 矢印の角度 (ラジアン, 30度)
 
@@ -190,6 +194,9 @@
         const clearLinesBtn = document.getElementById('clearLinesBtn');
         const undoBtn = document.getElementById('undoBtn');
         const resetAllBtn = document.getElementById('resetAllBtn');
+
+        const lineWidthControl = document.getElementById('lineWidth');
+        const lineColorControl = document.getElementById('lineColor');
 
         // --- キャンバスのリサイズと初期描画 ---
         function resizeCanvas() {
@@ -226,12 +233,12 @@
 
         // --- イベントリスナー設定 ---
         addPlayerBtn.addEventListener('click', () => {
-            addPlayer(ORIGINAL_COURT_LENGTH_PX / 2, ORIGINAL_COURT_WIDTH_PX / 2); 
+            addPlayer(ORIGINAL_COURT_LENGTH_PX / 4, ORIGINAL_COURT_WIDTH_PX / 2); // 少しずらして追加
             saveHistory();
         });
 
         addBallBtn.addEventListener('click', () => {
-            addBall(ORIGINAL_COURT_LENGTH_PX / 2 + 50, ORIGINAL_COURT_WIDTH_PX / 2 + 50);
+            addBall(ORIGINAL_COURT_LENGTH_PX / 2 + 50, ORIGINAL_COURT_WIDTH_PX / 2 + 50); // 少しずらして追加
             saveHistory();
         });
 
@@ -285,21 +292,20 @@
         // --- マウス/タッチイベント処理 ---
         function handleInteractionStart(clientX, clientY) {
             const rect = canvas.getBoundingClientRect();
-            const inputX = clientX - rect.left;
-            const inputY = clientY - rect.top;
+            const inputX = clientX - rect.left; // 現在のキャンバス要素内のX座標 (画面ピクセル)
+            const inputY = clientY - rect.top;  // 現在のキャンバス要素内のY座標 (画面ピクセル)
 
             // 画面座標(inputX, inputY)を、元のコート座標系(ORIGINAL_COURT_LENGTH_PX, ORIGINAL_COURT_WIDTH_PX)に変換するためのスケール
             const scaleX_to_original = ORIGINAL_COURT_LENGTH_PX / canvas.width;
             const scaleY_to_original = ORIGINAL_COURT_WIDTH_PX / canvas.height;
 
-            const scaledInputX = inputX * scaleX_to_original;
-            const scaledInputY = inputY * scaleY_to_original;
+            const scaledInputX = inputX * scaleX_to_original; // 元のコート座標系でのX座標
+            const scaledInputY = inputY * scaleY_to_original; // 元のコート座標系でのY座標
 
             // 元のコート座標系の値を画面座標系に変換するためのスケール（当たり判定用）
             const scaleX_for_rendering = canvas.width / ORIGINAL_COURT_LENGTH_PX;
             const scaleY_for_rendering = canvas.height / ORIGINAL_COURT_WIDTH_PX;
             const radiusScaleFactor = Math.min(scaleX_for_rendering, scaleY_for_rendering);
-
 
             if (drawLineMode) {
                 lineStart = { x: scaledInputX, y: scaledInputY };
