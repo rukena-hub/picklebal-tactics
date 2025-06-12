@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ピックルボール作戦板 (Web版) - v2025.06.13-v4</title>
+    <title>ピックルボール作戦板 (Web版) - v2025.06.13-v6</title>
     <style>
         html, body {
             height: 100%;
@@ -154,7 +154,7 @@
 
     <script>
         // Version for debugging and tracking changes
-        const APP_VERSION = "2025.06.13-v4";
+        const APP_VERSION = "2025.06.13-v6";
         console.log(`Pickleball Tactics Board - Version: ${APP_VERSION}`);
 
         const canvas = document.getElementById('pickleballCanvas');
@@ -166,7 +166,7 @@
         const ORIGINAL_COURT_LENGTH_PX = 1100; // 横方向 (44フィートに相当)
         const ORIGINAL_COURT_WIDTH_PX = 500;    // 縦方向 (20フィートに相当)
 
-        const HIT_AREA_PADDING = 25; // プレイヤーやボールの反応範囲に加えるパディング (px) - 15から25に増加
+        const HIT_AREA_PADDING = 25; // プレイヤーやボールの反応範囲に加えるパディング (px)
         const ARROWHEAD_SIZE = 10; // 矢印のサイズ (px)
         const ARROWHEAD_ANGLE = Math.PI / 6; // 矢印の角度 (ラジアン, 30度)
 
@@ -396,6 +396,8 @@
             if (drawLineMode && lineStart) {
                 currentDrawingLine.endX = scaledInputX;
                 currentDrawingLine.endY = scaledInputY;
+                // デバッグログ: 線描画中の終点座標を確認
+                // console.log(`Drawing Line End: (${currentDrawingLine.endX.toFixed(2)}, ${currentDrawingLine.endY.toFixed(2)})`);
                 redrawAll();
             } else if (draggingBall && currentBall) {
                 currentBall.x = scaledInputX;
@@ -526,7 +528,7 @@
             ctx.lineWidth = width;
             ctx.beginPath();
             ctx.moveTo(x1 * scaleX, y1 * scaleY);
-            ctx.lineTo(x2 * scaleX, y2 * scaleY);
+            ctx.lineTo(x2 * scaleX, y2 * scaleY); // <-- Corrected
             ctx.stroke();
         }
 
@@ -536,7 +538,7 @@
             ctx.lineWidth = width;
             ctx.beginPath();
             ctx.moveTo(x1 * scaleX, y1 * scaleY);
-            ctx.lineTo(x2 * scaleX, sy2); // <-- これはtypoか？ drawArrowLine内のsはscale済みのはず
+            ctx.lineTo(x2 * scaleX, y2 * scaleY); // <-- ここを修正
             ctx.stroke();
 
             // 矢印の描画
@@ -546,6 +548,10 @@
             const sy2 = y2 * scaleY;
 
             const lineLength = Math.sqrt(Math.pow(sx2 - sx1, 2) + Math.pow(sy2 - sy1, 2));
+
+            // デバッグログ: 線の長さと矢印描画条件を確認
+            // console.log(`Arrow line length: ${lineLength.toFixed(2)}, Condition: ${ARROWHEAD_SIZE * 2}`);
+
 
             // 線が十分に長い場合にのみ矢印を描画
             if (lineLength > ARROWHEAD_SIZE * 2) { 
