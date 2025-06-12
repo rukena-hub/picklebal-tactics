@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ピックルボール作戦板 (Web版) - v2025.06.13-v3</title>
+    <title>ピックルボール作戦板 (Web版) - v2025.06.13-v4</title>
     <style>
         html, body {
             height: 100%;
@@ -154,7 +154,7 @@
 
     <script>
         // Version for debugging and tracking changes
-        const APP_VERSION = "2025.06.13-v3";
+        const APP_VERSION = "2025.06.13-v4";
         console.log(`Pickleball Tactics Board - Version: ${APP_VERSION}`);
 
         const canvas = document.getElementById('pickleballCanvas');
@@ -166,7 +166,7 @@
         const ORIGINAL_COURT_LENGTH_PX = 1100; // 横方向 (44フィートに相当)
         const ORIGINAL_COURT_WIDTH_PX = 500;    // 縦方向 (20フィートに相当)
 
-        const HIT_AREA_PADDING = 15; // プレイヤーやボールの反応範囲に加えるパディング (px) - 10から15に増加
+        const HIT_AREA_PADDING = 25; // プレイヤーやボールの反応範囲に加えるパディング (px) - 15から25に増加
         const ARROWHEAD_SIZE = 10; // 矢印のサイズ (px)
         const ARROWHEAD_ANGLE = Math.PI / 6; // 矢印の角度 (ラジアン, 30度)
 
@@ -233,12 +233,14 @@
 
         // --- イベントリスナー設定 ---
         addPlayerBtn.addEventListener('click', () => {
-            addPlayer(ORIGINAL_COURT_LENGTH_PX / 4, ORIGINAL_COURT_WIDTH_PX / 2); // 少しずらして追加
+            // プレイヤーをコートの中央付近に追加 (長さ方向の半分、幅方向の半分から少しずらす)
+            addPlayer(ORIGINAL_COURT_LENGTH_PX / 4, ORIGINAL_COURT_WIDTH_PX / 2); 
             saveHistory();
         });
 
         addBallBtn.addEventListener('click', () => {
-            addBall(ORIGINAL_COURT_LENGTH_PX / 2 + 50, ORIGINAL_COURT_WIDTH_PX / 2 + 50); // 少しずらして追加
+            // ボールをプレイヤーとは少しずらした位置に追加
+            addBall(ORIGINAL_COURT_LENGTH_PX / 2 + 50, ORIGINAL_COURT_WIDTH_PX / 2 + 50);
             saveHistory();
         });
 
@@ -308,9 +310,12 @@
             const radiusScaleFactor = Math.min(scaleX_for_rendering, scaleY_for_rendering);
 
             if (drawLineMode) {
+                // 線描画モードの場合
                 lineStart = { x: scaledInputX, y: scaledInputY };
                 currentDrawingLine = { startX: scaledInputX, startY: scaledInputY, endX: scaledInputX, endY: scaledInputY, color: currentLineColor, width: currentLineWidth };
             } else {
+                // 通常モード（選手、ボールの操作、線の削除）
+
                 // まずボールのドラッグ判定 (ボールが存在する場合)
                 if (currentBall) {
                     const ballRenderX = currentBall.x * scaleX_for_rendering; // ボールのX座標を画面ピクセルに変換
@@ -321,7 +326,7 @@
                     if (distToBall < ballRenderRadius + HIT_AREA_PADDING) {
                         draggingBall = true;
                         currentPlayer = null;
-                        return; // ボールが選択されたら、プレイヤーのチェックはしない
+                        return; // ボールが選択されたら、プレイヤーや線のチェックはしない
                     }
                 }
 
@@ -336,7 +341,41 @@
                     if (dist < playerRenderRadius + HIT_AREA_PADDING) {
                         currentPlayer = p;
                         draggingBall = false;
-                        break;
+                        return; // プレイヤーが選択されたら、線のチェックはしない
+                    }
+                }
+
+                // 選手もボールも選択されなかったら、線の削除判定
+                for (let i = lines.length - 1; i >= 0; i--) {
+                    const l = lines[i];
+                    // 線分の描画位置を画面ピクセルに変換
+                    const lineRenderStartX = l.startX * scaleX_for_rendering;
+                    const lineRenderStartY = l.startY * scaleY_for_rendering;
+                    const lineRenderEndX = l.endX * scaleX_for_rendering;
+                    const lineRenderEndY = l.endY * scaleY_for_rendering;
+                    const lineRenderWidth = l.width * Math.min(scaleX_for_rendering, scaleY_for_rendering); // 線の太さもスケールに合わせる
+
+                    // 点と線分の距離を計算
+                    const dx = lineRenderEndX - lineRenderStartX;
+                    const dy = lineRenderEndY - lineRenderStartY;
+                    const lenSq = dx * dx + dy * dy;
+                    let t = 0;
+                    if (lenSq !== 0) { // 長さが0でない場合のみ計算
+                        t = ((inputX - lineRenderStartX) * dx + (inputY - lineRenderStartY) * dy) / lenSq;
+                        t = Math.max(0, Math.min(1, t)); // 線分内に制限
+                    }
+                    
+                    const closestX = lineRenderStartX + t * dx;
+                    const closestY = lineRenderStartY + t * dy;
+
+                    const distToLine = Math.sqrt(Math.pow(inputX - closestX, 2) + Math.pow(inputY - closestY, 2));
+                    
+                    // 線の太さ + パディングで判定
+                    if (distToLine < (lineRenderWidth / 2) + HIT_AREA_PADDING) {
+                        lines.splice(i, 1); // その線を削除
+                        redrawAll();
+                        saveHistory();
+                        return; // 1つの線だけ削除
                     }
                 }
             }
@@ -497,7 +536,7 @@
             ctx.lineWidth = width;
             ctx.beginPath();
             ctx.moveTo(x1 * scaleX, y1 * scaleY);
-            ctx.lineTo(x2 * scaleX, y2 * scaleY);
+            ctx.lineTo(x2 * scaleX, sy2); // <-- これはtypoか？ drawArrowLine内のsはscale済みのはず
             ctx.stroke();
 
             // 矢印の描画
