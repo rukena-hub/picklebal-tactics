@@ -30,7 +30,7 @@
             flex-direction: column;
             width: 100%;
             height: 100%;
-            max-width: 1200px;
+            max-width: 1200px; /* 最大幅を調整 */
             max-height: 98vh;
             box-sizing: border-box;
         }
@@ -38,8 +38,11 @@
             position: relative;
             background-color: #5cb85c; /* ピックルボールコートの芝生の色 */
             
+            /* 横長のコート（長さ方向が横） */
             width: 100%;
-            padding-bottom: 45.45%; /* height / width * 100% = 500 / 1100 * 100% = 45.45% */
+            /* 実際のコートの長さ44フィート:幅20フィート = 44:20 = 2.2:1
+               幅に対する高さの比率を 1/2.2 = 0.4545... に設定 */
+            padding-bottom: calc(100% / 2.2); /* 縦横比を 44:20 に維持 */
             height: 0;
             overflow: hidden;
             flex-grow: 1;
@@ -135,7 +138,8 @@
         </div>
         <div id="controls">
             <button id="addPlayerBtn">選手を追加</button>
-            <button id="addBallBtn">ボールを追加</button> <button id="clearPlayersBtn">選手をクリア</button>
+            <button id="addBallBtn">ボールを追加</button>
+            <button id="clearPlayersBtn">選手をクリア</button>
             <button id="toggleLineModeBtn">線描画モード</button>
             <button id="clearLinesBtn">線をクリア</button>
             <button id="undoBtn">元に戻す</button>
@@ -146,8 +150,7 @@
                 <input type="color" id="lineColor" value="#000000">
             </div>
             <button id="resetAllBtn">すべてリセット</button>
-            <button id="downloadBtn">画像をダウンロード</button>
-        </div>
+            </div>
     </div>
 
     <script>
@@ -155,17 +158,20 @@
         const ctx = canvas.getContext('2d');
         
         // --- 定数定義 ---
-        const ORIGINAL_COURT_WIDTH = 1100; // 元のコートの基準幅 (px)
-        const ORIGINAL_COURT_HEIGHT = 500; // 元のコートの基準高さ (px)
+        // コートの基準サイズ (44フィート x 20フィート の比率)
+        // 縦方向をコートの幅(20ft)、横方向をコートの長さ(44ft)として扱う
+        const ORIGINAL_COURT_LENGTH_PX = 1100; // 横方向 (44フィートに相当)
+        const ORIGINAL_COURT_WIDTH_PX = 500;    // 縦方向 (20フィートに相当)
+
         const HIT_AREA_PADDING = 10; // プレイヤーやボールの反応範囲に加えるパディング (px)
         const ARROWHEAD_SIZE = 10; // 矢印のサイズ (px)
         const ARROWHEAD_ANGLE = Math.PI / 6; // 矢印の角度 (ラジアン, 30度)
 
         // --- グローバル変数 ---
         let players = [];
-        let currentPlayer = null; // ドラッグ中のプレイヤー
-        let currentBall = null;   // 現在表示されているボール
-        let draggingBall = false; // ボールがドラッグ中かどうかのフラグ
+        let currentPlayer = null;
+        let currentBall = null;
+        let draggingBall = false;
 
         let lines = [];
         let drawLineMode = false;
@@ -179,36 +185,35 @@
 
         // --- DOM要素取得 ---
         const addPlayerBtn = document.getElementById('addPlayerBtn');
-        const addBallBtn = document.getElementById('addBallBtn'); // 新しく追加
+        const addBallBtn = document.getElementById('addBallBtn');
         const clearPlayersBtn = document.getElementById('clearPlayersBtn');
         const toggleLineModeBtn = document.getElementById('toggleLineModeBtn');
         const clearLinesBtn = document.getElementById('clearLinesBtn');
         const undoBtn = document.getElementById('undoBtn');
         const resetAllBtn = document.getElementById('resetAllBtn');
-        const downloadBtn = document.getElementById('downloadBtn');
-        const lineWidthControl = document.getElementById('lineWidth');
-        const lineColorControl = document.getElementById('lineColor');
+        // const downloadBtn = document.getElementById('downloadBtn'); // 削除
 
         // --- キャンバスのリサイズと初期描画 ---
         function resizeCanvas() {
             const container = document.getElementById('canvas-container');
             if (!container) {
                 console.error("Canvas container not found!");
-                canvas.width = ORIGINAL_COURT_WIDTH;
-                canvas.height = ORIGINAL_COURT_HEIGHT;
+                canvas.width = ORIGINAL_COURT_LENGTH_PX;
+                canvas.height = ORIGINAL_COURT_WIDTH_PX;
                 redrawAll();
                 return;
             }
 
             const containerWidth = container.clientWidth;
-            const courtAspectRatio = ORIGINAL_COURT_WIDTH / ORIGINAL_COURT_HEIGHT;
+            // コートの縦横比を 44フィート:20フィート (2.2:1) に設定
+            const courtAspectRatio = ORIGINAL_COURT_LENGTH_PX / ORIGINAL_COURT_WIDTH_PX;
 
             let newWidth = containerWidth;
             let newHeight = newWidth / courtAspectRatio;
 
             if (newWidth <= 0 || newHeight <= 0) {
-                 newWidth = ORIGINAL_COURT_WIDTH;
-                 newHeight = ORIGINAL_COURT_HEIGHT;
+                 newWidth = ORIGINAL_COURT_LENGTH_PX;
+                 newHeight = ORIGINAL_COURT_WIDTH_PX;
             }
 
             canvas.width = newWidth;
@@ -223,18 +228,20 @@
 
         // --- イベントリスナー設定 ---
         addPlayerBtn.addEventListener('click', () => {
-            addPlayer(ORIGINAL_COURT_WIDTH / 2, ORIGINAL_COURT_HEIGHT / 2); 
+            // プレイヤーをコートの中央付近に追加 (長さ方向の半分、幅方向の半分)
+            addPlayer(ORIGINAL_COURT_LENGTH_PX / 2, ORIGINAL_COURT_WIDTH_PX / 2); 
             saveHistory();
         });
 
-        addBallBtn.addEventListener('click', () => { // ボール追加ボタンのイベント
-            addBall(ORIGINAL_COURT_WIDTH / 2 + 50, ORIGINAL_COURT_HEIGHT / 2 + 50); // 少しずらして追加
+        addBallBtn.addEventListener('click', () => {
+            // ボールをプレイヤーとは少しずらした位置に追加
+            addBall(ORIGINAL_COURT_LENGTH_PX / 2 + 50, ORIGINAL_COURT_WIDTH_PX / 2 + 50);
             saveHistory();
         });
 
         clearPlayersBtn.addEventListener('click', () => {
             players = [];
-            currentBall = null; // ボールもクリア
+            currentBall = null;
             redrawAll();
             saveHistory();
         });
@@ -258,7 +265,7 @@
         resetAllBtn.addEventListener('click', () => {
             players = [];
             lines = [];
-            currentBall = null; // ボールもリセット
+            currentBall = null;
             drawLineMode = false;
             toggleLineModeBtn.textContent = '線描画モード (OFF)';
             canvas.style.cursor = 'default';
@@ -270,15 +277,7 @@
             redrawAll();
         });
 
-        downloadBtn.addEventListener('click', () => {
-            const dataURL = canvas.toDataURL('image/png');
-            const link = document.createElement('a');
-            link.download = 'pickleball_tactics.png';
-            link.href = dataURL;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
+        // downloadBtn.addEventListener('click', () => { ... }); // 削除
 
         lineWidthControl.addEventListener('input', (e) => {
             currentLineWidth = parseInt(e.target.value);
@@ -296,8 +295,8 @@
             const inputY = clientY - rect.top;
 
             // 画面座標を元のコート座標系に変換するスケール
-            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
-            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+            const scaleX_to_original = ORIGINAL_COURT_LENGTH_PX / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_WIDTH_PX / canvas.height;
 
             const scaledInputX = inputX * scaleX_to_original;
             const scaledInputY = inputY * scaleY_to_original;
@@ -306,16 +305,16 @@
                 lineStart = { x: scaledInputX, y: scaledInputY };
                 currentDrawingLine = { startX: scaledInputX, startY: scaledInputY, endX: scaledInputX, endY: scaledInputY, color: currentLineColor, width: currentLineWidth };
             } else {
-                // まずボールのドラッグ判定
+                // まずボールのドラッグ判定 (ボールが存在する場合)
                 if (currentBall) {
-                    const ballRenderX = currentBall.x * (canvas.width / ORIGINAL_COURT_WIDTH);
-                    const ballRenderY = currentBall.y * (canvas.height / ORIGINAL_COURT_HEIGHT);
-                    const ballRenderRadius = currentBall.radius * Math.min(canvas.width / ORIGINAL_COURT_WIDTH, canvas.height / ORIGINAL_COURT_HEIGHT);
+                    const ballRenderX = currentBall.x * (canvas.width / ORIGINAL_COURT_LENGTH_PX);
+                    const ballRenderY = currentBall.y * (canvas.height / ORIGINAL_COURT_WIDTH_PX);
+                    const ballRenderRadius = currentBall.radius * Math.min(canvas.width / ORIGINAL_COURT_LENGTH_PX, canvas.height / ORIGINAL_COURT_WIDTH_PX);
                     
                     const distToBall = Math.sqrt(Math.pow(inputX - ballRenderX, 2) + Math.pow(inputY - ballRenderY, 2));
                     if (distToBall < ballRenderRadius + HIT_AREA_PADDING) {
                         draggingBall = true;
-                        currentPlayer = null; // ボールをドラッグ中はプレイヤーをドラッグしない
+                        currentPlayer = null;
                         return; // ボールが選択されたら、プレイヤーのチェックはしない
                     }
                 }
@@ -323,14 +322,14 @@
                 // ボールがドラッグされなかったら、プレイヤーのドラッグ判定
                 for (let i = players.length - 1; i >= 0; i--) {
                     const p = players[i];
-                    const playerRenderX = p.x * (canvas.width / ORIGINAL_COURT_WIDTH);
-                    const playerRenderY = p.y * (canvas.height / ORIGINAL_COURT_HEIGHT);
-                    const playerRenderRadius = p.radius * Math.min(canvas.width / ORIGINAL_COURT_WIDTH, canvas.height / ORIGINAL_COURT_HEIGHT);
+                    const playerRenderX = p.x * (canvas.width / ORIGINAL_COURT_LENGTH_PX);
+                    const playerRenderY = p.y * (canvas.height / ORIGINAL_COURT_WIDTH_PX);
+                    const playerRenderRadius = p.radius * Math.min(canvas.width / ORIGINAL_COURT_LENGTH_PX, canvas.height / ORIGINAL_COURT_WIDTH_PX);
 
                     const dist = Math.sqrt(Math.pow(inputX - playerRenderX, 2) + Math.pow(inputY - playerRenderY, 2));
-                    if (dist < playerRenderRadius + HIT_AREA_PADDING) { // 拡大した範囲で判定
+                    if (dist < playerRenderRadius + HIT_AREA_PADDING) {
                         currentPlayer = p;
-                        draggingBall = false; // プレイヤーをドラッグ中はボールをドラッグしない
+                        draggingBall = false;
                         break;
                     }
                 }
@@ -342,8 +341,8 @@
             const inputX = clientX - rect.left;
             const inputY = clientY - rect.top;
 
-            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
-            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+            const scaleX_to_original = ORIGINAL_COURT_LENGTH_PX / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_WIDTH_PX / canvas.height;
 
             const scaledInputX = inputX * scaleX_to_original;
             const scaledInputY = inputY * scaleY_to_original;
@@ -352,11 +351,11 @@
                 currentDrawingLine.endX = scaledInputX;
                 currentDrawingLine.endY = scaledInputY;
                 redrawAll();
-            } else if (draggingBall && currentBall) { // ボールがドラッグ中の場合
+            } else if (draggingBall && currentBall) {
                 currentBall.x = scaledInputX;
                 currentBall.y = scaledInputY;
                 redrawAll();
-            } else if (currentPlayer) { // プレイヤーがドラッグ中の場合
+            } else if (currentPlayer) {
                 currentPlayer.x = scaledInputX;
                 currentPlayer.y = scaledInputY;
                 redrawAll();
@@ -371,7 +370,7 @@
                 saveHistory();
             }
             currentPlayer = null;
-            draggingBall = false; // ドラッグ終了時にフラグをリセット
+            draggingBall = false;
             redrawAll();
         }
 
@@ -392,16 +391,14 @@
         canvas.addEventListener('touchend', () => { handleInteractionEnd(); });
 
 
-        // --- プレイヤー/ボール追加関数 ---
-        // x, y は元のコート座標系
+        // --- プレイヤー/ボール追加関数 (x, y は元のコート座標系) ---
         function addPlayer(x, y) {
             players.push({ x: x, y: y, radius: 15, color: 'blue' });
             redrawAll();
         }
         
-        // x, y は元のコート座標系
         function addBall(x, y) {
-            currentBall = { x: x, y: y, radius: 8, color: 'yellow' }; // ボールは黄色で小さめ
+            currentBall = { x: x, y: y, radius: 12, color: 'yellow' }; // ボールの半径を12に変更
             redrawAll();
         }
 
@@ -410,30 +407,40 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             // 描画用のスケール（元の座標系から現在のキャンバスサイズへの変換）
-            const scaleX_for_drawing = canvas.width / ORIGINAL_COURT_WIDTH;
-            const scaleY_for_drawing = canvas.height / ORIGINAL_COURT_HEIGHT;
+            const scaleX = canvas.width / ORIGINAL_COURT_LENGTH_PX; // 横方向のスケール (長さ方向)
+            const scaleY = canvas.height / ORIGINAL_COURT_WIDTH_PX;    // 縦方向のスケール (幅方向)
 
-            // コートの線の描画
-            drawRect(0, 0, ORIGINAL_COURT_WIDTH, ORIGINAL_COURT_HEIGHT, 'white', 3, scaleX_for_drawing, scaleY_for_drawing);
+            // --- ピックルボールコートの描画 ---
+            // 外枠 (ベースラインとサイドライン)
+            drawSimpleRect(0, 0, ORIGINAL_COURT_LENGTH_PX, ORIGINAL_COURT_WIDTH_PX, 'white', 3, scaleX, scaleY);
 
-            // ネット (中央)
-            drawLine(ORIGINAL_COURT_WIDTH / 2, 0, ORIGINAL_COURT_WIDTH / 2, ORIGINAL_COURT_HEIGHT, 'white', 3, scaleX_for_drawing, scaleY_for_drawing);
+            // ネット (コートの長さ中央)
+            const netX = ORIGINAL_COURT_LENGTH_PX / 2; // X方向の半分
+            drawSimpleLine(netX, 0, netX, ORIGINAL_COURT_WIDTH_PX, 'white', 3, scaleX, scaleY);
 
-            // キッチンライン (ネットから7フィート) - 修正
-            const kitchenLineOffset = 7 * (ORIGINAL_COURT_HEIGHT / 44); // 44フィートのコート高さに対して7フィートのオフセット
-            const kitchenLineY1 = kitchenLineOffset;
-            const kitchenLineY2 = ORIGINAL_COURT_HEIGHT - kitchenLineOffset;
+            // キッチンライン (ネットから7フィート)
+            const feetToOriginalPxLength = ORIGINAL_COURT_LENGTH_PX / 44; // 長さ方向の1フィートあたりのピクセル数
+            const kitchenLineOffsetPx = 7 * feetToOriginalPxLength; // キッチンラインまでのピクセルオフセット
 
-            drawLine(0, kitchenLineY1, ORIGINAL_COURT_WIDTH, kitchenLineY1, 'white', 3, scaleX_for_drawing, scaleY_for_drawing);
-            drawLine(0, kitchenLineY2, ORIGINAL_COURT_WIDTH, kitchenLineY2, 'white', 3, scaleX_for_drawing, scaleY_for_drawing);
+            const kitchenLineX_leftHalf = netX - kitchenLineOffsetPx;
+            const kitchenLineX_rightHalf = netX + kitchenLineOffsetPx;
 
-            // センターライン（非キッチンエリア）
-            drawLine(ORIGINAL_COURT_WIDTH / 2, kitchenLineY1, ORIGINAL_COURT_WIDTH / 2, kitchenLineY2, 'white', 3, scaleX_for_drawing, scaleY_for_drawing);
+            drawSimpleLine(kitchenLineX_leftHalf, 0, kitchenLineX_leftHalf, ORIGINAL_COURT_WIDTH_PX, 'white', 3, scaleX, scaleY);
+            drawSimpleLine(kitchenLineX_rightHalf, 0, kitchenLineX_rightHalf, ORIGINAL_COURT_WIDTH_PX, 'white', 3, scaleX, scaleY);
 
-            // プレイヤーの描画
+            // センターサービスライン (キッチンラインからベースラインまで、両サイド)
+            const centerLineY = ORIGINAL_COURT_WIDTH_PX / 2; // Y方向の半分
+
+            // 左半分サービスゾーンのセンターライン
+            drawSimpleLine(0, centerLineY, kitchenLineX_leftHalf, centerLineY, 'white', 3, scaleX, scaleY);
+            // 右半分サービスゾーンのセンターライン
+            drawSimpleLine(kitchenLineX_rightHalf, centerLineY, ORIGINAL_COURT_LENGTH_PX, centerLineY, 'white', 3, scaleX, scaleY);
+
+
+            // --- プレイヤーの描画 ---
             players.forEach(p => {
                 ctx.beginPath();
-                ctx.arc(p.x * scaleX_for_drawing, p.y * scaleY_for_drawing, p.radius * Math.min(scaleX_for_drawing, scaleY_for_drawing), 0, Math.PI * 2);
+                ctx.arc(p.x * scaleX, p.y * scaleY, p.radius * Math.min(scaleX, scaleY), 0, Math.PI * 2);
                 ctx.fillStyle = p.color;
                 ctx.fill();
                 ctx.strokeStyle = 'black';
@@ -441,10 +448,10 @@
                 ctx.stroke();
             });
 
-            // ボールの描画 (存在する場合)
+            // --- ボールの描画 (存在する場合) ---
             if (currentBall) {
                 ctx.beginPath();
-                ctx.arc(currentBall.x * scaleX_for_drawing, currentBall.y * scaleY_for_drawing, currentBall.radius * Math.min(scaleX_for_drawing, scaleY_for_drawing), 0, Math.PI * 2);
+                ctx.arc(currentBall.x * scaleX, currentBall.y * scaleY, currentBall.radius * Math.min(scaleX, scaleY), 0, Math.PI * 2);
                 ctx.fillStyle = currentBall.color;
                 ctx.fill();
                 ctx.strokeStyle = 'black';
@@ -452,26 +459,35 @@
                 ctx.stroke();
             }
 
-            // 線の描画
+            // --- ユーザーが描画した線の描画 (矢印付き) ---
             lines.forEach(l => {
-                drawLine(l.startX, l.startY, l.endX, l.endY, l.color, l.width, scaleX_for_drawing, scaleY_for_drawing);
+                drawArrowLine(l.startX, l.startY, l.endX, l.endY, l.color, l.width, scaleX, scaleY);
             });
 
-            // 現在描画中の線
+            // --- 現在描画中の線 (矢印付き) ---
             if (drawLineMode && currentDrawingLine) {
-                drawLine(currentDrawingLine.startX, currentDrawingLine.startY, currentDrawingLine.endX, currentDrawingLine.endY, currentDrawingLine.color, currentDrawingLine.width, scaleX_for_drawing, scaleY_for_drawing);
+                drawArrowLine(currentDrawingLine.startX, currentDrawingLine.startY, currentDrawingLine.endX, currentDrawingLine.endY, currentDrawingLine.color, currentDrawingLine.width, scaleX, scaleY);
             }
         }
 
-        // 図形描画ヘルパー関数
-        function drawRect(x, y, width, height, color, lineWidth, scaleX, scaleY) {
+        // --- 図形描画ヘルパー関数 (コートライン用、矢印なし) ---
+        function drawSimpleRect(x, y, width, height, color, lineWidth, scaleX, scaleY) {
             ctx.strokeStyle = color;
             ctx.lineWidth = lineWidth;
             ctx.strokeRect(x * scaleX, y * scaleY, width * scaleX, height * scaleY);
         }
 
-        // 矢印付きの線を描画するヘルパー関数
-        function drawLine(x1, y1, x2, y2, color, width, scaleX, scaleY) {
+        function drawSimpleLine(x1, y1, x2, y2, color, width, scaleX, scaleY) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(x1 * scaleX, y1 * scaleY);
+            ctx.lineTo(x2 * scaleX, y2 * scaleY);
+            ctx.stroke();
+        }
+
+        // --- 矢印付きの線を描画するヘルパー関数 (ユーザー描画線用) ---
+        function drawArrowLine(x1, y1, x2, y2, color, width, scaleX, scaleY) {
             ctx.strokeStyle = color;
             ctx.lineWidth = width;
             ctx.beginPath();
@@ -489,11 +505,10 @@
 
             // 線が十分に長い場合にのみ矢印を描画
             if (lineLength > ARROWHEAD_SIZE * 2) { 
-                const angle = Math.atan2(sy2 - sy1, sx2 - sx1); // 線の角度
+                const angle = Math.atan2(sy2 - sy1, sx2 - sx1);
 
                 ctx.beginPath();
                 ctx.moveTo(sx2, sy2);
-                // 矢印の先端から、線の角度から+/-ARROWHEAD_ANGLE分ずれた2点を描画
                 ctx.lineTo(sx2 - ARROWHEAD_SIZE * Math.cos(angle - ARROWHEAD_ANGLE), sy2 - ARROWHEAD_SIZE * Math.sin(angle - ARROWHEAD_ANGLE));
                 ctx.moveTo(sx2, sy2);
                 ctx.lineTo(sx2 - ARROWHEAD_SIZE * Math.cos(angle + ARROWHEAD_ANGLE), sy2 - ARROWHEAD_SIZE * Math.sin(angle + ARROWHEAD_ANGLE));
@@ -509,7 +524,7 @@
             history.push({
                 players: JSON.parse(JSON.stringify(players)),
                 lines: JSON.parse(JSON.stringify(lines)),
-                currentBall: currentBall ? JSON.parse(JSON.stringify(currentBall)) : null // ボールも履歴に保存
+                currentBall: currentBall ? JSON.parse(JSON.stringify(currentBall)) : null
             });
             updateUndoButton();
         }
@@ -519,7 +534,7 @@
                 const prevState = history.pop();
                 players = JSON.parse(JSON.stringify(prevState.players));
                 lines = JSON.parse(JSON.stringify(prevState.lines));
-                currentBall = prevState.currentBall ? JSON.parse(JSON.stringify(prevState.currentBall)) : null; // ボールも復元
+                currentBall = prevState.currentBall ? JSON.parse(JSON.stringify(prevState.currentBall)) : null;
                 redrawAll();
                 updateUndoButton();
             }
