@@ -5,21 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ピックルボール作戦板 (Web版)</title>
     <style>
-        html, body { /* html要素とbody要素の両方に高さを指定 */
-            height: 100%; /* これを追加 */
+        html, body {
+            height: 100%;
             margin: 0;
             padding: 0;
-            box-sizing: border-box; /* paddingとborderをwidth/heightに含める */
+            box-sizing: border-box;
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
-            /* min-height: 100vh; */ /* height: 100% と併用すると重複するので不要 */
             background-color: #f0f0f0;
-            overflow: hidden; /* スクロールバーが表示されないように */
-            padding: 5px; /* 全体に少し余白 */
+            overflow: hidden;
+            padding: 5px;
         }
         #app-container {
             display: flex;
@@ -28,54 +27,53 @@
             background-color: white;
             border-radius: 8px;
             overflow: hidden;
-            flex-direction: column; /* 縦並びにする */
-            width: 100%; /* 親要素の幅に合わせる */
-            height: 100%; /* 親要素の高さに合わせる */
-            max-width: 1200px; /* PCでの最大幅 */
-            max-height: 98vh; /* 画面高さの最大98% */
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            max-width: 1200px;
+            max-height: 98vh;
             box-sizing: border-box;
         }
         #canvas-container {
             position: relative;
             background-color: #5cb85c; /* ピックルボールコートの芝生の色 */
             
-            /* レスポンシブな設定: アスペクト比を維持しつつ親要素にフィット */
-            width: 100%;       /* 親要素（#app-container）の幅に合わせる */
+            width: 100%;
             padding-bottom: 45.45%; /* height / width * 100% = 500 / 1100 * 100% = 45.45% */
-            height: 0;         /* padding-bottomで高さを制御するためheightを0にする */
-            overflow: hidden;  /* 子要素がはみ出さないように */
-            flex-grow: 1;      /* 利用可能なスペースを占める */
+            height: 0;
+            overflow: hidden;
+            flex-grow: 1;
             border-right: 1px solid #ddd;
         }
         canvas {
-            position: absolute; /* 親要素のpadding-bottomでできた領域に絶対配置 */
+            position: absolute;
             top: 0;
             left: 0;
-            width: 100%;    /* 親要素の幅に合わせる */
-            height: 100%;   /* 親要素の高さに合わせる */
+            width: 100%;
+            height: 100%;
             display: block;
         }
         #controls {
-            padding: 10px 15px; /* パディングを少し減らしてスペース確保 */
+            padding: 10px 15px;
             background-color: #eee;
             border-top: 1px solid #ddd;
             display: flex;
-            flex-wrap: wrap; /* ボタンが複数行になっても対応 */
-            gap: 8px; /* ボタン間のスペースを少し減らす */
+            flex-wrap: wrap;
+            gap: 8px;
             justify-content: center;
-            align-items: center; /* 垂直方向も中央揃え */
-            flex-shrink: 0; /* 縮小されないように */
+            align-items: center;
+            flex-shrink: 0;
         }
         button, select, input[type="range"] {
-            padding: 8px 12px; /* パディングを少し減らす */
+            padding: 8px 12px;
             border: none;
             border-radius: 5px;
             background-color: #007bff;
             color: white;
             cursor: pointer;
-            font-size: 13px; /* フォントサイズを少し小さく */
+            font-size: 13px;
             transition: background-color 0.2s;
-            white-space: nowrap; /* ボタン内のテキストが改行されないように */
+            white-space: nowrap;
         }
         button:hover, select:hover {
             background-color: #0056b3;
@@ -85,20 +83,21 @@
             cursor: not-allowed;
         }
         input[type="range"] {
-            -webkit-appearance: none;
-            width: 100px; /* 幅を調整 */
+            appearance: none; /* 追加: 標準プロパティ */
+            -webkit-appearance: none; /* そのまま: WebKitベンダープレフィックス */
+            width: 100px;
             height: 8px;
             background: #d3d3d3;
             outline: none;
             opacity: 0.7;
             transition: opacity .2s;
             border-radius: 5px;
-            vertical-align: middle; /* ラベルと高さを揃える */
+            vertical-align: middle;
         }
         input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px; /* サムのサイズを少し小さく */
+            appearance: none; /* 追加: 標準プロパティ */
+            -webkit-appearance: none; /* そのまま: WebKitベンダープレフィックス */
+            width: 18px;
             height: 18px;
             border-radius: 50%;
             background: #007bff;
@@ -124,7 +123,7 @@
             border-radius: 4px;
         }
         label {
-            font-size: 13px; /* ラベルのフォントサイズを調整 */
+            font-size: 13px;
             white-space: nowrap;
         }
     </style>
@@ -155,35 +154,58 @@
         const canvas = document.getElementById('pickleballCanvas');
         const ctx = canvas.getContext('2d');
         
-        // キャンバスのサイズを親要素に合わせて設定
+        // 元のコートの基準サイズ
+        const ORIGINAL_COURT_WIDTH = 1100;
+        const ORIGINAL_COURT_HEIGHT = 500;
+
+        // キャンバスのサイズを親要素に合わせて設定し、再描画
         function resizeCanvas() {
-            // CSSで width: 100%; height: 100%; に設定されているため
-            // クライアントの実際のレンダリングサイズを取得
-            canvas.width = canvas.clientWidth;
-            canvas.height = canvas.clientHeight;
-            redrawAll(); // サイズ変更後に再描画
+            const container = document.getElementById('canvas-container');
+            if (!container) {
+                console.error("Canvas container not found!");
+                canvas.width = ORIGINAL_COURT_WIDTH;
+                canvas.height = ORIGINAL_COURT_HEIGHT;
+                redrawAll();
+                return;
+            }
+
+            const containerWidth = container.clientWidth;
+            const courtAspectRatio = ORIGINAL_COURT_WIDTH / ORIGINAL_COURT_HEIGHT;
+
+            let newWidth = containerWidth;
+            let newHeight = newWidth / courtAspectRatio;
+
+            if (newWidth <= 0 || newHeight <= 0) {
+                 newWidth = ORIGINAL_COURT_WIDTH; // フォールバック値
+                 newHeight = ORIGINAL_COURT_HEIGHT;
+            }
+
+            canvas.width = newWidth;
+            canvas.height = newHeight;
+
+            console.log('Canvas resized to:', canvas.width, 'x', canvas.height);
+            redrawAll();
         }
         
-        // ページロード時とウィンドウサイズ変更時にキャンバスをリサイズ
         window.addEventListener('DOMContentLoaded', resizeCanvas);
         window.addEventListener('resize', resizeCanvas);
 
 
         // プレイヤーデータ
         let players = [];
-        let currentPlayer = null; // ドラッグ中のプレイヤー
+        let currentPlayer = null;
 
         // 線のデータ
         let lines = [];
         let drawLineMode = false;
         let lineStart = null;
         let currentDrawingLine = null;
-        let currentLineColor = '#000000'; // 初期色
-        let currentLineWidth = 3; // 初期線の太さ
+        let currentLineColor = '#000000';
+        let currentLineWidth = 3;
 
         // アンドゥ履歴
         let history = [];
-        const MAX_HISTORY = 20; // 履歴の最大数
+        const MAX_HISTORY = 20;
 
         // DOM要素
         const addPlayerBtn = document.getElementById('addPlayerBtn');
@@ -191,4 +213,305 @@
         const toggleLineModeBtn = document.getElementById('toggleLineModeBtn');
         const clearLinesBtn = document.getElementById('clearLinesBtn');
         const undoBtn = document.getElementById('undoBtn');
-        const resetAllBtn = document.getElementById('
+        const resetAllBtn = document.getElementById('resetAllBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const lineWidthControl = document.getElementById('lineWidth');
+        const lineColorControl = document.getElementById('lineColor');
+
+        // イベントリスナーの追加
+        addPlayerBtn.addEventListener('click', () => {
+            addPlayer(ORIGINAL_COURT_WIDTH / 2, ORIGINAL_COURT_HEIGHT / 2); 
+            saveHistory();
+        });
+
+        clearPlayersBtn.addEventListener('click', () => {
+            players = [];
+            redrawAll();
+            saveHistory();
+        });
+
+        toggleLineModeBtn.addEventListener('click', () => {
+            drawLineMode = !drawLineMode;
+            toggleLineModeBtn.textContent = drawLineMode ? '線描画モード (ON)' : '線描画モード (OFF)';
+            canvas.style.cursor = drawLineMode ? 'crosshair' : 'default';
+        });
+
+        clearLinesBtn.addEventListener('click', () => {
+            lines = [];
+            redrawAll();
+            saveHistory();
+        });
+
+        undoBtn.addEventListener('click', () => {
+            undo();
+        });
+
+        resetAllBtn.addEventListener('click', () => {
+            players = [];
+            lines = [];
+            drawLineMode = false;
+            toggleLineModeBtn.textContent = '線描画モード (OFF)';
+            canvas.style.cursor = 'default';
+            currentLineColor = '#000000';
+            currentLineWidth = 3;
+            lineWidthControl.value = 3;
+            lineColorControl.value = '#000000';
+            history = [];
+            redrawAll();
+        });
+
+        downloadBtn.addEventListener('click', () => {
+            const dataURL = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'pickleball_tactics.png';
+            link.href = dataURL;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        lineWidthControl.addEventListener('input', (e) => {
+            currentLineWidth = parseInt(e.target.value);
+        });
+
+        lineColorControl.addEventListener('input', (e) => {
+            currentLineColor = e.target.value;
+        });
+
+
+        // マウスイベント
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // 画面座標を元のコート座標系に変換
+            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+
+            const scaledMouseX = mouseX * scaleX_to_original;
+            const scaledMouseY = mouseY * scaleY_to_original;
+
+            if (drawLineMode) {
+                lineStart = { x: scaledMouseX, y: scaledMouseY };
+                currentDrawingLine = { startX: scaledMouseX, startY: scaledMouseY, endX: scaledMouseX, endY: scaledMouseY, color: currentLineColor, width: currentLineWidth };
+            } else {
+                for (let i = players.length - 1; i >= 0; i--) {
+                    const p = players[i];
+                    // プレイヤーのクリック判定は実際のキャンバスサイズで
+                    const playerRenderX = p.x * (canvas.width / ORIGINAL_COURT_WIDTH);
+                    const playerRenderY = p.y * (canvas.height / ORIGINAL_COURT_HEIGHT);
+                    const playerRenderRadius = p.radius * Math.min(canvas.width / ORIGINAL_COURT_WIDTH, canvas.height / ORIGINAL_COURT_HEIGHT);
+
+                    const dist = Math.sqrt(Math.pow(mouseX - playerRenderX, 2) + Math.pow(mouseY - playerRenderY, 2));
+                    if (dist < playerRenderRadius) { 
+                        currentPlayer = p;
+                        break;
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+
+            const scaledMouseX = mouseX * scaleX_to_original;
+            const scaledMouseY = mouseY * scaleY_to_original;
+
+            if (drawLineMode && lineStart) {
+                currentDrawingLine.endX = scaledMouseX;
+                currentDrawingLine.endY = scaledMouseY;
+                redrawAll();
+            } else if (currentPlayer) {
+                currentPlayer.x = scaledMouseX;
+                currentPlayer.y = scaledMouseY;
+                redrawAll();
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            if (drawLineMode && lineStart && currentDrawingLine) {
+                lines.push({ ...currentDrawingLine });
+                lineStart = null;
+                currentDrawingLine = null;
+                saveHistory();
+            }
+            currentPlayer = null;
+            redrawAll();
+        });
+
+
+        // タッチイベントリスナー
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+
+            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+
+            const scaledTouchX = touchX * scaleX_to_original;
+            const scaledTouchY = touchY * scaleY_to_original;
+
+            if (drawLineMode) {
+                lineStart = { x: scaledTouchX, y: scaledTouchY };
+                currentDrawingLine = { startX: scaledTouchX, startY: scaledTouchY, endX: scaledTouchX, endY: scaledTouchY, color: currentLineColor, width: currentLineWidth };
+            } else {
+                for (let i = players.length - 1; i >= 0; i--) {
+                    const p = players[i];
+                    const playerRenderX = p.x * (canvas.width / ORIGINAL_COURT_WIDTH);
+                    const playerRenderY = p.y * (canvas.height / ORIGINAL_COURT_HEIGHT);
+                    const playerRenderRadius = p.radius * Math.min(canvas.width / ORIGINAL_COURT_WIDTH, canvas.height / ORIGINAL_COURT_HEIGHT);
+
+                    const dist = Math.sqrt(Math.pow(touchX - playerRenderX, 2) + Math.pow(touchY - playerRenderY, 2));
+                    if (dist < playerRenderRadius) { 
+                        currentPlayer = p;
+                        break;
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+
+            const scaleX_to_original = ORIGINAL_COURT_WIDTH / canvas.width;
+            const scaleY_to_original = ORIGINAL_COURT_HEIGHT / canvas.height;
+
+            const scaledTouchX = touchX * scaleX_to_original;
+            const scaledTouchY = touchY * scaleY_to_original;
+
+            if (drawLineMode && lineStart) {
+                currentDrawingLine.endX = scaledTouchX;
+                currentDrawingLine.endY = scaledTouchY;
+                redrawAll();
+            } else if (currentPlayer) {
+                currentPlayer.x = scaledTouchX;
+                currentPlayer.y = scaledTouchY;
+                redrawAll();
+            }
+        });
+
+        canvas.addEventListener('touchend', () => {
+            if (drawLineMode && lineStart && currentDrawingLine) {
+                lines.push({ ...currentDrawingLine });
+                lineStart = null;
+                currentDrawingLine = null;
+                saveHistory();
+            }
+            currentPlayer = null;
+            redrawAll();
+        });
+
+
+        // プレイヤー追加関数 (x, y は元のコート座標系)
+        function addPlayer(x, y) {
+            players.push({ x: x, y: y, radius: 15, color: 'blue' });
+            redrawAll();
+        }
+
+        // 描画関数
+        function redrawAll() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 描画用のスケール（元の座標系から現在のキャンバスサイズへの変換）
+            const scaleX_for_drawing = canvas.width / ORIGINAL_COURT_WIDTH;
+            const scaleY_for_height = canvas.height / ORIGINAL_COURT_HEIGHT; // height は異なるスケールになる可能性も考慮 (アスペクト比固定のため通常はscaleX_for_drawingと同じ)
+
+            // コートの線の描画
+            drawRect(0, 0, ORIGINAL_COURT_WIDTH, ORIGINAL_COURT_HEIGHT, 'white', 3, scaleX_for_drawing, scaleY_for_height);
+
+            drawLine(550, 0, 550, ORIGINAL_COURT_HEIGHT, 'white', 3, scaleX_for_drawing, scaleY_for_height);
+
+            const kitchenLineY1 = 7 * ORIGINAL_COURT_HEIGHT / 22;
+            const kitchenLineY2 = ORIGINAL_COURT_HEIGHT - (7 * ORIGINAL_COURT_HEIGHT / 22);
+
+            drawLine(0, kitchenLineY1, ORIGINAL_COURT_WIDTH, kitchenLineY1, 'white', 3, scaleX_for_drawing, scaleY_for_height);
+            drawLine(0, kitchenLineY2, ORIGINAL_COURT_WIDTH, kitchenLineY2, 'white', 3, scaleX_for_drawing, scaleY_for_height);
+
+            drawLine(550, kitchenLineY1, 550, kitchenLineY2, 'white', 3, scaleX_for_drawing, scaleY_for_height);
+
+            // プレイヤーの描画
+            players.forEach(p => {
+                ctx.beginPath();
+                ctx.arc(p.x * scaleX_for_drawing, p.y * scaleY_for_height, p.radius * Math.min(scaleX_for_drawing, scaleY_for_height), 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+
+            // 線の描画
+            lines.forEach(l => {
+                drawLine(l.startX, l.startY, l.endX, l.endY, l.color, l.width, scaleX_for_drawing, scaleY_for_height);
+            });
+
+            // 現在描画中の線
+            if (drawLineMode && currentDrawingLine) {
+                drawLine(currentDrawingLine.startX, currentDrawingLine.startY, currentDrawingLine.endX, currentDrawingLine.endY, currentDrawingLine.color, currentDrawingLine.width, scaleX_for_drawing, scaleY_for_height);
+            }
+        }
+
+        // 図形描画ヘルパー関数 (スケール値を引数で受け取る)
+        function drawRect(x, y, width, height, color, lineWidth, scaleX, scaleY) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.strokeRect(x * scaleX, y * scaleY, width * scaleX, height * scaleY);
+        }
+
+        function drawLine(x1, y1, x2, y2, color, width, scaleX, scaleY) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = width;
+            ctx.beginPath();
+            ctx.moveTo(x1 * scaleX, y1 * scaleY);
+            ctx.lineTo(x2 * scaleX, y2 * scaleY);
+            ctx.stroke();
+        }
+
+        // 履歴保存関数
+        function saveHistory() {
+            if (history.length >= MAX_HISTORY) {
+                history.shift();
+            }
+            history.push({
+                players: JSON.parse(JSON.stringify(players)),
+                lines: JSON.parse(JSON.stringify(lines))
+            });
+            updateUndoButton();
+        }
+
+        // アンドゥ関数
+        function undo() {
+            if (history.length > 0) {
+                const prevState = history.pop();
+                players = JSON.parse(JSON.stringify(prevState.players));
+                lines = JSON.parse(JSON.stringify(prevState.lines));
+                redrawAll();
+                updateUndoButton();
+            }
+        }
+
+        // アンドゥボタンの活性状態を更新
+        function updateUndoButton() {
+            undoBtn.disabled = history.length === 0;
+        }
+
+        // 初期状態を履歴に保存し、アンドゥボタンを更新
+        saveHistory();
+        updateUndoButton();
+
+    </script>
+</body>
+</html>
