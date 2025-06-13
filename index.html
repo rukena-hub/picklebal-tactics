@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> <title>ピックルボール作戦板 (Web版) - v2025.06.13-v9</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> <title>ピックルボール作戦板 (Web版) - v2025.06.13-v10</title>
     <style>
         html, body {
             height: 100%;
@@ -153,16 +153,15 @@
                 <label for="lineColor">線の色:</label>
                 <input type="color" id="lineColor" value="#000000">
             </div>
-            <button id="zoomOutBtn">ズームアウト (-)</button>
-            <button id="zoomInBtn">ズームイン (+)</button>
             <button id="resetZoomBtn">ズームリセット</button>
-            <button id="togglePanModeBtn">パンモード</button> <button id="resetAllBtn">すべてリセット</button>
+            <button id="togglePanModeBtn">パンモード</button>
+            <button id="resetAllBtn">すべてリセット</button>
         </div>
     </div>
 
     <script>
         // Version for debugging and tracking changes
-        const APP_VERSION = "2025.06.13-v9";
+        const APP_VERSION = "2025.06.13-v10";
         console.log(`Pickleball Tactics Board - Version: ${APP_VERSION}`);
 
         const canvas = document.getElementById('pickleballCanvas');
@@ -220,10 +219,10 @@
         const clearLinesBtn = document.getElementById('clearLinesBtn');
         const undoBtn = document.getElementById('undoBtn');
         const resetAllBtn = document.getElementById('resetAllBtn');
-        const zoomInBtn = document.getElementById('zoomInBtn');
-        const zoomOutBtn = document.getElementById('zoomOutBtn');
+        // const zoomInBtn = document.getElementById('zoomInBtn'); // 削除
+        // const zoomOutBtn = document.getElementById('zoomOutBtn'); // 削除
         const resetZoomBtn = document.getElementById('resetZoomBtn');
-        const togglePanModeBtn = document.getElementById('togglePanModeBtn'); // 新しいボタン
+        const togglePanModeBtn = document.getElementById('togglePanModeBtn');
 
         const lineWidthControl = document.getElementById('lineWidth');
         const lineColorControl = document.getElementById('lineColor');
@@ -289,6 +288,7 @@
             // 線描画モードON/OFFでパンモードもOFFにする
             panMode = false;
             togglePanModeBtn.textContent = 'パンモード (OFF)';
+            canvas.style.cursor = 'default';
         });
 
         togglePanModeBtn.addEventListener('click', () => {
@@ -314,11 +314,14 @@
             players = [];
             lines = [];
             currentBall = null;
+            
             drawLineMode = false;
             toggleLineModeBtn.textContent = '線描画モード (OFF)';
+            
             panMode = false; // リセット時にパンモードもOFF
             togglePanModeBtn.textContent = 'パンモード (OFF)';
             canvas.style.cursor = 'default';
+
             currentLineColor = '#000000';
             currentLineWidth = 3;
             lineWidthControl.value = 3;
@@ -338,12 +341,12 @@
             currentLineColor = e.target.value;
         });
 
-        zoomInBtn.addEventListener('click', () => zoom(ZOOM_STEP));
-        zoomOutBtn.addEventListener('click', () => zoom(-ZOOM_STEP));
         resetZoomBtn.addEventListener('click', resetZoomAndPan);
 
-        // マウスホイールでのズーム
+        // マウスホイールでのズーム (パンモードON時のみ有効)
         canvasContainer.addEventListener('wheel', (e) => {
+            if (!panMode) return; // パンモードがONでない場合は何もしない
+
             e.preventDefault(); // ページのスクロールを防ぐ
             const zoomAmount = e.deltaY * -0.001; // ホイールの動きをズーム量に変換
             const rect = canvas.getBoundingClientRect();
@@ -371,7 +374,7 @@
             offsetY = zoomCenterY - transformedZoomCenterY * currentZoomLevel;
 
             applyTransform();
-            console.log("Current Zoom Level:", currentZoomLevel, "OffsetX:", offsetX, "OffsetY:", offsetY);
+            console.log("Current Zoom Level:", currentZoomLevel.toFixed(2), "OffsetX:", offsetX.toFixed(2), "OffsetY:", offsetY.toFixed(2));
         }
 
         function resetZoomAndPan() {
@@ -383,24 +386,27 @@
 
         // パンのオフセットをコート内に制限する関数
         function clampPanOffset() {
-            const scaledCanvasWidth = canvas.width * currentZoomLevel;
-            const scaledCanvasHeight = canvas.height * currentZoomLevel;
+            const scaledContentWidth = canvas.width * currentZoomLevel;
+            const scaledContentHeight = canvas.height * currentZoomLevel;
 
-            // ズームされたコンテンツの左端、上端がどこまで移動できるか
+            // ズームされたコンテンツがキャンバス内に収まるようにオフセットを制限
+            // 左端: 0 (コートが画面の左端より右には行かない)
+            // 右端: canvas.width - scaledContentWidth (コートが画面の右端より左には行かない)
+            // → minOffsetX は負の値になるか0になる
+            const minOffsetX = canvas.width - scaledContentWidth;
             const maxOffsetX = 0;
+
+            const minOffsetY = canvas.height - scaledContentHeight;
             const maxOffsetY = 0;
-
-            // ズームされたコンテンツの右端、下端がどこまで移動できるか
-            // (キャンバスの幅 - ズームされた幅) を超えないように
-            const minOffsetX = canvas.width - scaledCanvasWidth;
-            const minOffsetY = canvas.height - scaledCanvasHeight;
             
-            // console.log(`Canvas: ${canvas.width}x${canvas.height}, Scaled: ${scaledCanvasWidth.toFixed(2)}x${scaledCanvasHeight.toFixed(2)}`);
-            // console.log(`MinX: ${minOffsetX.toFixed(2)}, MaxX: ${maxOffsetX.toFixed(2)}`);
-            // console.log(`MinY: ${minOffsetY.toFixed(2)}, MaxY: ${maxOffsetY.toFixed(2)}`);
-
             offsetX = Math.max(minOffsetX, Math.min(maxOffsetX, offsetX));
             offsetY = Math.max(minOffsetY, Math.min(maxOffsetY, offsetY));
+
+            // ズームレベルが1.0未満（縮小表示）の場合、中央に表示する
+            if (currentZoomLevel < 1.0) {
+                offsetX = (canvas.width - scaledContentWidth) / 2;
+                offsetY = (canvas.height - scaledContentHeight) / 2;
+            }
         }
 
         function applyTransform() {
@@ -436,8 +442,8 @@
         function handleInteractionStart(e) {
             e.preventDefault();
 
-            // ピンチジェスチャーの開始判定 (2本指タッチ)
-            if (e.touches && e.touches.length === 2) {
+            // ピンチジェスチャーの開始判定 (2本指タッチ) - パンモードON時のみ
+            if (panMode && e.touches && e.touches.length === 2) {
                 isPinching = true;
                 lastTouchDistance = Math.sqrt(
                     Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
@@ -453,9 +459,8 @@
                 isPanning = false;
                 drawLineMode = false;
                 toggleLineModeBtn.textContent = '線描画モード (OFF)';
-                panMode = false; // ピンチ中はパンモードもOFF
-                togglePanModeBtn.textContent = 'パンモード (OFF)';
-                canvas.style.cursor = 'default';
+                // panModeはピンチ中はONのまま
+                canvas.style.cursor = 'default'; // カーソルをデフォルトに戻す
                 return;
             }
 
@@ -473,16 +478,17 @@
             const scaleY_for_rendering = canvas.height / ORIGINAL_COURT_WIDTH_PX;
             const radiusScaleFactor = Math.min(scaleX_for_rendering, scaleY_for_rendering);
 
-            if (drawLineMode) {
+            if (drawLineMode) { // 線描画モードがONの場合
                 lineStart = { x: originalCourtX, y: originalCourtY };
                 currentDrawingLine = { startX: originalCourtX, startY: originalCourtY, endX: originalCourtX, endY: originalCourtY, color: currentLineColor, width: currentLineWidth };
                 isDraggingPlayerOrBall = false;
-                isPanning = false; // 線描画中はパンしない
+                isPanning = false;
             } else if (panMode) { // パンモードがONの場合
                 isPanning = true;
                 lastPanX = clientX;
                 lastPanY = clientY;
-            } else { // 通常モード（選手、ボールの操作、線の削除）
+                canvas.style.cursor = 'grabbing'; // パン中にカーソルを変更
+            } else { // 選手/ボールの操作、線の削除 (パンモードも線描画モードもOFFの場合)
                 // まずボールのドラッグ判定
                 if (currentBall) {
                     const ballRenderX = currentBall.x * scaleX_for_rendering;
@@ -494,7 +500,7 @@
                         isDraggingPlayerOrBall = true;
                         draggingBall = true;
                         currentPlayer = null;
-                        isPanning = false; // ドラッグ中はパンしない
+                        isPanning = false;
                         return;
                     }
                 }
@@ -511,7 +517,7 @@
                         isDraggingPlayerOrBall = true;
                         currentPlayer = p;
                         draggingBall = false;
-                        isPanning = false; // ドラッグ中はパンしない
+                        isPanning = false;
                         return;
                     }
                 }
@@ -543,7 +549,7 @@
                         lines.splice(i, 1);
                         redrawAll();
                         saveHistory();
-                        isPanning = false; // 削除操作中はパンしない
+                        isPanning = false;
                         return;
                     }
                 }
@@ -553,8 +559,8 @@
         function handleInteractionMove(e) {
             e.preventDefault();
 
-            // ピンチジェスチャー中
-            if (isPinching && e.touches && e.touches.length === 2) {
+            // ピンチジェスチャー中 (パンモードON時のみ)
+            if (panMode && isPinching && e.touches && e.touches.length === 2) {
                 const currentTouchDistance = Math.sqrt(
                     Math.pow(e.touches[0].clientX - e.touches[1].clientX, 2) +
                     Math.pow(e.touches[0].clientY - e.touches[1].clientY, 2)
@@ -570,8 +576,6 @@
                     
                     const clampedZoomLevel = Math.min(MAX_ZOOM_LEVEL, Math.max(MIN_ZOOM_LEVEL, newZoomLevel));
 
-                    // ズーム中心を考慮してパンを調整
-                    // 現在のオフセットに、指の中心の移動量と、ズームによる拡大縮小の中心のずれを考慮したオフセットを加算
                     offsetX += currentTouchCenter.x - lastTouchCenter.x - (currentTouchCenter.x - offsetX) * (clampedZoomLevel / currentZoomLevel - 1);
                     offsetY += currentTouchCenter.y - lastTouchCenter.y - (currentTouchCenter.y - offsetY) * (clampedZoomLevel / currentZoomLevel - 1);
 
@@ -623,8 +627,6 @@
             if (isPinching) {
                 isPinching = false;
                 lastTouchDistance = null;
-                // ピンチ終了時にも履歴を保存するならここに追加
-                // saveHistory(); 
                 applyTransform(); // 終了時にも念のためパンの制限を適用
                 return;
             }
@@ -642,6 +644,9 @@
             draggingBall = false;
             isDraggingPlayerOrBall = false;
             isPanning = false;
+            if (panMode) { // パンモードがONならカーソルを戻す
+                canvas.style.cursor = 'grab';
+            }
             redrawAll(); // 終了時にも念のため再描画
         }
 
